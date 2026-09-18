@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 
 import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
 
 type ScreeningRecord = {
   id?: string;
@@ -21,12 +22,49 @@ type ScreeningRecord = {
   riskLevel?: string;
   status?: string;
   date?: string;
+  tamperingScore?: number;
+  ocrConfidence?: number | string;
 };
-
 export default function Analytics() {
-  const history: ScreeningRecord[] = JSON.parse(
-    localStorage.getItem("borderguard_history") || "[]"
-  );
+  const [history, setHistory] = useState<ScreeningRecord[]>([]);
+
+  useEffect(() => {
+    fetch("http://127.0.0.1:8000/verification/screening-history")
+      .then((response) => response.json())
+      .then((data) => {
+        if (data.history) {
+          const mappedHistory: ScreeningRecord[] = data.history.map(
+            (item: any) => ({
+              id: String(item.screening_id || ""),
+              name: item.applicant_name || "",
+              applicant: item.applicant_name || "",
+
+              documentType: item.document_type || "",
+              document_type: item.document_type || "",
+
+              riskScore: Number(item.risk_score || 0),
+              risk_score: Number(item.risk_score || 0),
+
+              riskLevel: item.risk_level || "",
+              status: item.status || "",
+
+              date: item.screening_date || "",
+
+              tamperingScore: Number(item.tampering_score || 0),
+              ocrConfidence: Number(item.ocr_confidence || 0),
+            })
+          );
+
+          setHistory(mappedHistory);
+        }
+      })
+      .catch((error) => {
+        console.error(
+          "Failed to load analytics data:",
+          error
+        );
+      });
+  }, []);
 
   const totalScreenings = history.length;
 
@@ -50,23 +88,51 @@ export default function Analytics() {
   const verificationRate =
     totalScreenings > 0
       ? Math.round(
-          (verifiedCount / totalScreenings) * 100
-        )
+        (verifiedCount / totalScreenings) * 100
+      )
       : 0;
 
   const reviewRate =
     totalScreenings > 0
       ? Math.round(
-          (reviewCount / totalScreenings) * 100
-        )
+        (reviewCount / totalScreenings) * 100
+      )
       : 0;
 
   const highRiskRate =
     totalScreenings > 0
       ? Math.round(
-          (highRiskCount / totalScreenings) * 100
+        (highRiskCount / totalScreenings) * 100
+      )
+      : 0;
+  const averageRiskScore =
+    totalScreenings > 0
+      ? Math.round(
+        history.reduce(
+          (sum, item) =>
+            sum + (item.riskScore ?? item.risk_score ?? 0),
+          0
+        ) / totalScreenings
+      )
+      : 0;
+
+  const tamperingCount = history.filter(
+    (item) => (item.tamperingScore ?? 0) > 10
+  ).length;
+
+  const averageOcrConfidence =
+  (() => {
+    const ocrValues = history
+      .map((item) => Number(item.ocrConfidence))
+      .filter((value) => !isNaN(value));
+
+    return ocrValues.length > 0
+      ? Math.round(
+          ocrValues.reduce((sum, value) => sum + value, 0) /
+            ocrValues.length
         )
       : 0;
+  })();
 
   const documentTypes = history.reduce(
     (acc: Record<string, number>, item) => {
@@ -145,7 +211,7 @@ export default function Analytics() {
 
         {/* STAT CARDS */}
 
-        <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
 
           {/* TOTAL */}
 
@@ -252,7 +318,89 @@ export default function Analytics() {
               {highRiskRate}% of screenings
             </p>
 
+                    </div>
+
+
+          {/* AVERAGE RISK SCORE */}
+
+          <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+
+            <div className="flex items-center justify-between">
+
+              <p className="text-sm text-slate-400">
+                Average Risk Score
+              </p>
+
+              <div className="rounded-lg bg-purple-500/10 p-2 text-purple-400">
+                <ShieldCheck size={20} />
+              </div>
+
+            </div>
+
+            <p className="mt-4 text-3xl font-bold text-purple-400">
+              {averageRiskScore}
+            </p>
+
+            <p className="mt-1 text-xs text-slate-500">
+              Average across all screenings
+            </p>
+
           </div>
+
+
+          {/* TAMPERING CASES */}
+
+          <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+
+            <div className="flex items-center justify-between">
+
+              <p className="text-sm text-slate-400">
+                Possible Tampering
+              </p>
+
+              <div className="rounded-lg bg-orange-500/10 p-2 text-orange-400">
+                <AlertTriangle size={20} />
+              </div>
+
+            </div>
+
+            <p className="mt-4 text-3xl font-bold text-orange-400">
+              {tamperingCount}
+            </p>
+
+            <p className="mt-1 text-xs text-slate-500">
+              Cases requiring review
+            </p>
+
+          </div>
+
+
+          {/* AVERAGE OCR */}
+
+          <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
+
+            <div className="flex items-center justify-between">
+
+              <p className="text-sm text-slate-400">
+                Average OCR Confidence
+              </p>
+
+              <div className="rounded-lg bg-cyan-500/10 p-2 text-cyan-400">
+                <FileSearch size={20} />
+              </div>
+
+            </div>
+
+            <p className="mt-4 text-3xl font-bold text-cyan-400">
+              {averageOcrConfidence}%
+            </p>
+
+            <p className="mt-1 text-xs text-slate-500">
+              Average OCR confidence
+            </p>
+
+          </div>
+
 
         </div>
 
